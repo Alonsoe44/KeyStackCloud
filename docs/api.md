@@ -125,7 +125,30 @@ Example request:
 
 ## Native import
 
-The importer has no account or authentication layer. The historical `/import/*` paths and versioned `/api/v1/import/*` aliases have the same behavior.
+The importer has no account or authentication layer. The historical `/import/*` paths and versioned `/api/v1/import/*` aliases have the same behavior, except search, which only exists at its versioned path.
+
+### `GET /api/v1/import/search?q=<text>`
+
+Finds up to 10 Source Videos on YouTube so a listener can pick one to import without leaving the kiosk. The service collapses whitespace in `q`, runs one flat yt-dlp search (`ytsearch10:<q>`), and returns:
+
+```json
+{
+  "sourceVideos": [
+    {
+      "id": "QDYfEBY9NM4",
+      "url": "https://www.youtube.com/watch?v=QDYfEBY9NM4",
+      "title": "Let It Be (Piano)",
+      "channel": "Piano Channel",
+      "durationSeconds": 243,
+      "thumbnailUrl": "https://i.ytimg.com/vi/QDYfEBY9NM4/mqdefault.jpg"
+    }
+  ]
+}
+```
+
+Live, upcoming, and post-live entries, entries without a known duration, and non-video results (channels, playlists) are left out, so the list can be shorter than 10 or empty (`200` with `[]`). `url` is the canonical watch URL accepted by `POST /import/inspect`. `channel` may be `null`. Thumbnails are YouTube-hosted; the service does not proxy them.
+
+Errors use the usual `{ "error": { "code", "message" } }` body: `400 INVALID_QUERY` for a missing, repeated, or blank `q`; `504 SEARCH_TIMEOUT` when yt-dlp runs longer than 30 seconds (the process is killed); `502 SEARCH_FAILED` when yt-dlp fails or prints no usable JSON; `503 DEPENDENCY_UNAVAILABLE` when yt-dlp cannot start. There is intentionally no cache, concurrency limit, or query length limit; see [ADR 0006](adr/0006-youtube-search-through-yt-dlp.md).
 
 ### `POST /import/inspect`
 

@@ -36,6 +36,15 @@ export interface ImportInspection {
   policyMessage: string;
 }
 
+export interface SourceVideo {
+  id: string;
+  url: string;
+  title: string;
+  channel: string | null;
+  durationSeconds: number | null;
+  thumbnailUrl: string;
+}
+
 export interface ImportJob {
   id: string;
   title: string;
@@ -336,7 +345,7 @@ function chooseFormat(formats: RawFormat[], requestedFormatId?: string): RawForm
   return compatible[0] as RawFormat;
 }
 
-function ytDlpArgs(_executable: string, url: string, mode: 'inspect' | 'download', formatId?: string, outputPath?: string, ffmpegPath?: string): string[] {
+function ytDlpBaseArgs(): string[] {
   const args = [
     '--ignore-config',
     '--no-warnings',
@@ -354,6 +363,11 @@ function ytDlpArgs(_executable: string, url: string, mode: 'inspect' | 'download
   if (remoteComponents) args.push('--remote-components', remoteComponents);
   const cacheDirectory = process.env.YTDLP_CACHE_DIR?.trim();
   if (cacheDirectory) args.push('--cache-dir', cacheDirectory);
+  return args;
+}
+
+function ytDlpArgs(_executable: string, url: string, mode: 'inspect' | 'download', formatId?: string, outputPath?: string, ffmpegPath?: string): string[] {
+  const args = ytDlpBaseArgs();
   if (mode === 'inspect') return [...args, '--dump-single-json', '--skip-download', url];
   return [
     ...args,
@@ -373,6 +387,68 @@ function ytDlpArgs(_executable: string, url: string, mode: 'inspect' | 'download
 
 function infoFormats(info: RawInfo): RawFormat[] {
   return Array.isArray(info.formats) ? info.formats.filter((format): format is RawFormat => typeof format === 'object' && format !== null) : [];
+}
+
+export const SOURCE_VIDEO_SEARCH_LIMIT = 10;
+const SEARCH_TIMEOUT_MS = 30_000;
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+
+export function validateSearchQuery(rawQuery: string): string {
+  const query = rawQuery.replace(/\s+/g, ' ').trim();
+  if (query.length === 0) throw new ImportError('INVALID_QUERY', 'Enter a song or artist to search for.');
+  return query;
+}
+
+// Turns one flat yt-dlp search entry into a Source Video, or null when it
+// cannot become a Song (live, upcoming, unknown duration, not a video).
+export function sourceVideoFromEntry(entry: RawInfo): SourceVideo | null {
+  const id = text(entry.id);
+  if (!VIDEO_ID.test(id)) return null;
+  const ieKey = text(entry.ie_key);
+  if (ieKey && ieKey !== 'Youtube') return null;
+  const liveStatus = lower(entry.live_status);
+  if (entry.is_live === true || ['is_live', 'is_upcoming', 'post_live'].includes(liveStatus)) return null;
+  const duration = numberOrNull(entry.duration);
+  if (duration === null || duration <= 0) return null;
+  return {
+    id,
+    url: `https://www.youtube.com/watch?v=${id}`,
+    title: text(entry.title) || 'Untitled video',
+    channel: text(entry.channel) || text(entry.uploader) || null,
+    durationSeconds: Math.round(duration),
+    thumbnailUrl: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+  };
+}
+
+export async function searchSourceVideos(rawQuery: string, ytDlpPath = 'yt-dlp', timeoutMs = SEARCH_TIMEOUT_MS): Promise<SourceVideo[]> {
+  const query = validateSearchQuery(rawQuery);
+  const args = [
+    ...ytDlpBaseArgs(),
+    '--flat-playlist',
+    '--dump-single-json',
+    `ytsearch${SOURCE_VIDEO_SEARCH_LIMIT}:${query}`,
+  ];
+  let result: ProcessResult;
+  try {
+    result = await runProcess(ytDlpPath, args, { timeoutMs });
+  } catch (error) {
+    if (error instanceof ImportError && error.code === 'DEPENDENCY_UNAVAILABLE') throw error;
+    if (error instanceof ImportError && error.code === 'PROCESS_TIMEOUT') {
+      throw new ImportError('SEARCH_TIMEOUT', 'YouTube search took too long. Try again.');
+    }
+    throw new ImportError('SEARCH_FAILED', error instanceof Error ? error.message : String(error));
+  }
+  let info: RawInfo;
+  try {
+    info = safeJsonOutput(result.stdout);
+  } catch {
+    throw new ImportError('SEARCH_FAILED', 'yt-dlp returned no usable search results.');
+  }
+  const entries = Array.isArray(info.entries) ? info.entries : [];
+  return entries
+    .filter((entry): entry is RawInfo => typeof entry === 'object' && entry !== null)
+    .map(sourceVideoFromEntry)
+    .filter((video): video is SourceVideo => video !== null);
 }
 
 export async function inspectVideo(url: string, ytDlpPath = 'yt-dlp'): Promise<ImportInspection> {
@@ -766,6 +842,7 @@ interface ImportServiceOptions {
   ffprobePath?: string | undefined;
   stagingRoot?: string | undefined;
   inspect?: (url: string, path: string) => Promise<ImportInspection>;
+  search?: (query: string, path: string) => Promise<SourceVideo[]>;
   download?: typeof downloadNativeAac;
   probe?: typeof probeNativeAac;
 }
@@ -778,6 +855,7 @@ export class ImportService {
   private readonly ffprobePath: string;
   private readonly stagingRoot: string;
   private readonly inspectFn: NonNullable<ImportServiceOptions['inspect']>;
+  private readonly searchFn: NonNullable<ImportServiceOptions['search']>;
   private readonly downloadFn: NonNullable<ImportServiceOptions['download']>;
   private readonly probeFn: NonNullable<ImportServiceOptions['probe']>;
   private readonly pending: string[] = [];
@@ -795,6 +873,7 @@ export class ImportService {
       throw new Error('IMPORT_STAGING_ROOT must be a child directory of AUDIO_ROOT for atomic publication.');
     }
     this.inspectFn = options.inspect ?? inspectVideo;
+    this.searchFn = options.search ?? searchSourceVideos;
     this.downloadFn = options.download ?? downloadNativeAac;
     this.probeFn = options.probe ?? probeNativeAac;
     this.store.markInterrupted();
@@ -802,6 +881,10 @@ export class ImportService {
 
   public async inspect(url: string): Promise<ImportInspection> {
     return this.inspectFn(validateYoutubeUrl(url), this.ytDlpPath);
+  }
+
+  public async search(query: string): Promise<SourceVideo[]> {
+    return this.searchFn(validateSearchQuery(query), this.ytDlpPath);
   }
 
   public create(input: CreateImportInput): ImportJob {

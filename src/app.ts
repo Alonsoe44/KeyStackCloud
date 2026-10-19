@@ -163,10 +163,11 @@ function getSongOrThrow(store: SongStore, id: string): SongRecord {
 }
 
 function importStatusCode(error: ImportError): number {
-  if (['INVALID_URL', 'INVALID_METADATA', 'INVALID_FORMAT'].includes(error.code)) return 400;
+  if (['INVALID_URL', 'INVALID_METADATA', 'INVALID_FORMAT', 'INVALID_QUERY'].includes(error.code)) return 400;
   if (error.code === 'JOB_NOT_FOUND') return 404;
   if (error.code === 'JOB_NOT_RETRYABLE') return 409;
   if (error.code === 'DEPENDENCY_UNAVAILABLE') return 503;
+  if (error.code === 'SEARCH_TIMEOUT') return 504;
   if (['PLAYLIST_UNSUPPORTED', 'LIVE_VIDEO_UNSUPPORTED', 'INCOMPATIBLE_FORMAT', 'FORMAT_UNAVAILABLE'].includes(error.code)) return 422;
   return 502;
 }
@@ -239,6 +240,18 @@ export async function buildApp(config: AppConfig): Promise<AppResources> {
     }
   };
 
+  const searchImport = async (request: FastifyRequest<{ Querystring: { q?: unknown } }>, reply: FastifyReply): Promise<void> => {
+    try {
+      reply.send({ sourceVideos: await importer.search(bodyText(request.query.q)) });
+    } catch (error) {
+      if (error instanceof ImportError) {
+        sendError(reply, importStatusCode(error), error.code, error.message);
+        return;
+      }
+      throw error;
+    }
+  };
+
   const createImport = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
       const body = getImportBody(request);
@@ -293,6 +306,9 @@ export async function buildApp(config: AppConfig): Promise<AppResources> {
     app.get<{ Params: ImportParams }>(`${prefix}/jobs/:id`, getImport);
     app.post<{ Params: ImportParams }>(`${prefix}/jobs/:id/retry`, retryImport);
   }
+
+  // Search is new, so it only gets the versioned route.
+  app.get<{ Querystring: { q?: unknown } }>('/api/v1/import/search', searchImport);
 
   app.get('/songs', async () => ({ songs: store.list().map(publicSong) }));
 

@@ -15,3 +15,7 @@ _Avoid_: Catalog, playlist
 **Listener**:
 A person listening to songs from the shared library. All listeners have access to the same songs, with no ownership or personal collection.
 _Avoid_: Owner, subscriber
+
+**Source Video**:
+A YouTube video that a listener can find, preview, and import to create a Song. It is not part of the Library until an import publishes it.
+_Avoid_: Song, search result, candidate
