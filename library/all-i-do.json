@@ -1,0 +1,22 @@
+{
+  "id": "all-i-do-stevie-wonder",
+  "title": "All I Do",
+  "artist": "Stevie Wonder",
+  "album": null,
+  "duration_seconds": 306.676009,
+  "file_path": "all-i-do-stevie-wonder.m4a",
+  "source_file": "All I Do [-bnx_Qwy7w4].m4a",
+  "source_sha256": "6b26fe8c6a550f522a5d5f7b65bf5680b43144b4f95a46d88c34b9cbcd3743ca",
+  "source_size_bytes": 4961487,
+  "container": "MP4/M4A",
+  "codec": "AAC-LC",
+  "codec_tag": "mp4a",
+  "ffmpeg_profile": 1,
+  "sample_rate_hz": 44100,
+  "channels": 2,
+  "source_bitrate_bits_per_second": 128009,
+  "fast_start": true,
+  "validated_with": "jrottenberg/ffmpeg:6.0-ubuntu",
+  "validated_image_id": "sha256:811209dad16ce9700da0f2c3d214b958d5323b9dcd6f0568130c2e58d2cb0693",
+  "validated_at": "2026-10-18"
+}

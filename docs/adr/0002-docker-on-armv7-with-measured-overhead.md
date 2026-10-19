@@ -1,0 +1,3 @@
+# Retain Docker on ARMv7 subject to resource measurements
+
+We retain one API container for reproducible deployment, building away from the Pi and keeping audio/SQLite state on SSD bind mounts. On this 920 MiB ARMv7 Pi, acceptance requires less than 100 MiB additional idle container-infrastructure memory and ten simultaneous listeners without sustained swapping or playback stalls; these are targets to verify, not measured costs. Start with an officially available Node 22 ARMv7 image and plan migration to supported 64-bit hardware/runtime before Node 22 support ends on 2027-04-30 rather than adopting a custom long-term ARMv7 Node build.

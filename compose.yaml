@@ -1,0 +1,56 @@
+services:
+  api:
+    image: ${SONGSTREAMER_IMAGE:-songstreamer:dev}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/arm/v7
+    user: "${SONGSTREAMER_UID:-1000}:${SONGSTREAMER_GID:-1000}"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATA_ROOT: /data
+      AUDIO_ROOT: /audio
+      DB_PATH: /data/songstreamer.sqlite
+      MIGRATIONS_DIR: /app/migrations
+      REQUIRE_SSD_MARKER: "true"
+      SSD_MARKER_PATH: /data/.songstreamer-ssd
+      IMPORT_STAGING_ROOT: /audio/.import-staging
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/yt-dlp-cache
+      YTDLP_CACHE_DIR: /tmp/yt-dlp-cache
+      YTDLP_PATH: /opt/yt-dlp/bin/yt-dlp
+      FFMPEG_PATH: /usr/bin/ffmpeg
+      FFPROBE_PATH: /usr/bin/ffprobe
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:${SONGSTREAMER_PORT:-3000}:3000"
+    volumes:
+      - ${SONGSTREAMER_DATA_DIR:-/srv/keystack-data/songstreamer/data}:/data
+      # The importer stages under .import-staging and atomically renames into
+      # imports/. Keep both paths on the same writable SSD filesystem.
+      - ${SONGSTREAMER_AUDIO_DIR:-/srv/keystack-data/songstreamer/audio}:/audio:rw
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 10s
+    mem_limit: 256m
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

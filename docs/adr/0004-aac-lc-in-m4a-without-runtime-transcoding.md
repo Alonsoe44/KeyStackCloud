@@ -1,0 +1,3 @@
+# Serve AAC-LC in M4A without runtime transcoding
+
+The library uses unencrypted AAC-LC audio in .m4a files, preserving compatible source bitrate and sample rate, to keep native browser playback and the Pi's streaming path simple. Operators validate and prepare files before publication; the API serves bytes without decoding or conversion. We accept platform-dependent AAC decoding support and require browser playback/seek validation before deployment rather than adding multiple codecs or live transcoding. The earlier Pi 5 target is deferred by the current execution constraint in [docs/current-constraints.md](../current-constraints.md).

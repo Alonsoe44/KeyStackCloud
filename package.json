@@ -1,0 +1,25 @@
+{
+  "name": "songstreamer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small public music library API for Raspberry Pi.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "start": "node dist/src/main.js",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "check": "npm run test",
+    "library": "npm run build && node scripts/library.mjs"
+  },
+  "dependencies": {
+    "fastify": "5.12.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.20",
+    "typescript": "7.0.2"
+  }
+}
