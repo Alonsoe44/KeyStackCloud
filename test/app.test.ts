@@ -301,21 +301,21 @@ test('lyrics reject duplicate IDs, zero-length words, and overlapping word spans
   };
   const invalidPayloads = [
     {
-      ...base,
+      code: 'INVALID_LYRICS',
       lines: [{
         id: 'line-1', text: 'First Song', startMs: 0, endMs: 2000,
         words: [{ id: 'same', text: 'First', startMs: 0 }, { id: 'same', text: 'Song', startMs: 900 }],
       }],
     },
     {
-      ...base,
+      code: 'INVALID_LYRICS',
       lines: [{
         id: 'line-1', text: 'First Song', startMs: 0, endMs: 2000,
         words: [{ id: 'w1', text: 'First', startMs: 0, endMs: 0 }, { id: 'w2', text: 'Song', startMs: 900 }],
       }],
     },
     {
-      ...base,
+      code: 'NON_MONOTONIC_TIMESTAMPS',
       lines: [{
         id: 'line-1', text: 'First Song', startMs: 0, endMs: 2000,
         words: [{ id: 'w1', text: 'First', startMs: 0, endMs: 1200 }, { id: 'w2', text: 'Song', startMs: 900 }],
@@ -323,10 +323,10 @@ test('lyrics reject duplicate IDs, zero-length words, and overlapping word spans
     },
   ];
 
-  for (const payload of invalidPayloads) {
-    const response = await request(resources.app, { method: 'PUT', url: '/api/v1/songs/song-1/lyrics', payload });
+  for (const { code, lines } of invalidPayloads) {
+    const response = await request(resources.app, { method: 'PUT', url: '/api/v1/songs/song-1/lyrics', payload: { ...base, lines } });
     assert.equal(response.statusCode, 400);
-    assert.equal(response.json().error.code, 'INVALID_LYRICS');
+    assert.equal(response.json().error.code, code);
   }
   const missing = await request(resources.app, { method: 'GET', url: '/api/v1/songs/song-1/lyrics' });
   assert.equal(missing.statusCode, 404);

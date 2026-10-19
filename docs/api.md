@@ -97,7 +97,7 @@ PUT /api/v1/songs/:id/lyrics
 
 The document is versioned with `schemaVersion: 1` and is tied to the exact recording by `songId` and `audioSha256`. It contains a language, `reviewStatus: "complete"`, ordered lines, ordered words, and non-negative integer millisecond timestamps. A line has `startMs`, `endMs`, and words with `startMs` plus an optional `endMs`.
 
-`PUT` validates line and word ordering, unique IDs, text/word agreement, line containment, audio duration bounds, and the recording hash before replacing the existing row in one SQLite transaction. A hashed recording requires the current `audioSha256`; a stale or omitted hash returns `409` (`AUDIO_VERSION_MISMATCH` or `AUDIO_VERSION_REQUIRED`). Invalid timing returns `400`, and the previous saved document remains available after a rejected request. `GET` returns `404 LYRICS_NOT_FOUND` when no complete document exists for the current recording.
+`PUT` validates line and word ordering, unique IDs, text/word agreement, line containment, audio duration bounds, and the recording hash before replacing the existing row in one SQLite transaction. A hashed recording requires the current `audioSha256`; a stale or omitted hash returns `409` (`AUDIO_VERSION_MISMATCH` or `AUDIO_VERSION_REQUIRED`). Invalid timing returns `400` (`INVALID_LYRICS`, or `NON_MONOTONIC_TIMESTAMPS` for out-of-order or overlapping line/word spans), and the previous saved document remains available after a rejected request. `GET` returns `404 LYRICS_NOT_FOUND` when no complete document exists for the current recording.
 
 Example request:
 
