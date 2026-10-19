@@ -116,3 +116,39 @@ backend. The previous export is available at
 deployment acknowledgement; no client UI, playback, hardware, or screenshot
 acceptance was performed. The user explicitly authorized deployment-only SSH
 access for this release and handles all client acceptance testing.
+
+## Release 0.3.0 deployment
+
+On 2026-10-19 at approximately 19:34 Europe/Madrid, commit `21fb654` (YouTube
+search for Source Videos, `GET /api/v1/import/search`) was released to the
+server Pi as the ARMv7 image `songstreamer:0.3.0`, image ID
+`sha256:2b299f996b196878cce8baa805f02358b8baceb5aaf66be36284e0d4bb6b68d6`. The
+archive is stored at
+`/srv/keystack-data/songstreamer/releases/0.3.0/songstreamer-0.3.0.tar.gz` with
+SHA-256 `fe73c16bd637b03491a992007fa8d96acbb8039e23fcb07ee6e719fe44c64dc6`
+(matching the MacBook copy). Before release the same image passed a local
+emulated smoke test: `/health` ok, a real search returned 10 Source Videos,
+and an empty query returned `400`.
+
+The release has no schema change; `compose.yaml` was unchanged and only
+`/opt/songstreamer/.env` moved from `songstreamer:0.2.0` to
+`songstreamer:0.3.0`. The previous files are kept as `compose.previous.yaml`
+and `env.previous` in the release directory, and images `0.2.0` and `0.1.0`
+remain for rollback (restore `env.previous` and `docker compose up -d`).
+
+With the API stopped, the database was backed up to
+`/srv/keystack-data/songstreamer/backups/songstreamer-2026-10-19T173422254Z.sqlite`
+and copied to `.local-backups/` (SHA-256
+`cbc528571bbb616fac06fcb903540023def87b5fa5761cf1d3ca8c2184d3f218`); it passes
+`PRAGMA integrity_check` and contains the single `All I Do` song.
+
+Public verification through `https://serverpi.taild695c4.ts.net`: `/health`
+`200`; `/api/v1/import/health` ready for yt-dlp, ffmpeg, and ffprobe; `/songs`
+lists `All I Do`; audio `Range: bytes=0-127` returns `206 audio/mp4`;
+`/api/v1/import/search?q=let it be piano` returned 10 Source Videos in about
+6.9 seconds end to end on Pi 2; an empty query returns `400`; CORS preflight
+returns `204` with `Access-Control-Allow-Origin: *`. The memory-cgroup warning
+is unchanged.
+
+The client Pi received the matching frontend export only (see KeyStack
+`deploy/README.md`); no client acceptance was performed.
