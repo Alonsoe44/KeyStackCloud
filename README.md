@@ -40,6 +40,10 @@ The framework-agnostic browser GUI contract, native audio state model, responsiv
 
 ## Production layout
 
+Start with the [fresh server setup and recovery guide](docs/server-recovery.md)
+to recreate this backend, preserve the database and audio library, and identify
+the OS, storage and public-access configuration that Git does not contain.
+
 The host setup uses the existing ext4 SSD mount and creates:
 
 ```text
