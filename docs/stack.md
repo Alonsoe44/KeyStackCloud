@@ -8,9 +8,9 @@ This inventory records the selected stack, the tools used for local verification
 | --- | --- | --- |
 | Language | TypeScript | Confirmed; compile before deployment |
 | Runtime | Node.js 22.23.2 on ARMv7 | Production Docker image pinned to the Node 22.23.2 Bookworm slim index digest; migrate before 2027-04-30 |
-| HTTP framework | Fastify 5.12.7 | Locked in package-lock.json; no Fastify plugins are required |
+| HTTP framework | Fastify 5.12.7 | Locked in package-lock.json; the only application plugin is the pinned Scalar API reference |
 | Database | SQLite | Confirmed; metadata on SSD, outside container image |
-| SQLite integration | Node built-in node:sqlite | Plan choice; Node >=22.13, no extra native addon or ORM; Node 22 API remains in active development |
+| SQLite integration | Node built-in node:sqlite | Plan choice; the API needs Node >=22.13, while the repository's OpenAPI validation/test toolchain and `npm ci` manifest require Node >=22.19; no extra native addon or ORM; Node 22 API remains in active development |
 | Audio | Unencrypted AAC-LC in .m4a | Confirmed; compatible source rates retained; no live conversion |
 | Delivery | Native HTTP audio with byte ranges | Required for ordinary browser playback and seeking |
 | Identity | No backend login/accounts | Confirmed; optional future frontend username has no authorization meaning |

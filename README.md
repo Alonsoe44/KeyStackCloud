@@ -1,8 +1,8 @@
 # SongStreamer
 
-SongStreamer is a small, public music library API and native AAC-LC YouTube importer for a Raspberry Pi 2 Model B. It stores verified recordings in `.m4a` files and exposes metadata plus native HTTP audio playback. The service has no accounts, deduplication, artwork API, or search, and never transcodes audio.
+SongStreamer is a small, public music library API and native AAC-LC YouTube importer for a Raspberry Pi 2 Model B. It stores verified recordings in `.m4a` files and exposes metadata plus native HTTP audio playback. The service has no accounts, deduplication, or artwork API, and never transcodes audio.
 
-The application targets Node.js 22.13 or later in the Node 22 line, Fastify 5.12.7, and Node's built-in `node:sqlite`. The production image is pinned to the Node 22.23.2 Bookworm slim image and built for `linux/arm/v7`. The ARMv7 image is built on another machine and transferred to the Pi; the Pi does not compile the application.
+The application targets Node.js 22.19 or later in the Node 22 line, Fastify 5.12.7, and Node's built-in `node:sqlite`. The 22.19 development minimum is required by the pinned OpenAPI validation toolchain; the production image is pinned to the Node 22.23.2 Bookworm slim image and built for `linux/arm/v7`. The ARMv7 image is built on another machine and transferred to the Pi; the Pi does not compile the application.
 
 ## Local development
 
@@ -13,7 +13,7 @@ npm ci
 npm test
 ```
 
-The test suite exercises migrations, metadata responses, exact-recording lyric saves and validation, CORS preflight, safe audio paths, full and ranged responses, HEAD, conditional requests, and missing files. The local development runtime needs Node 22.13 or later because `node:sqlite` is used by the application. Node 24 also runs the suite, but emits Node's experimental SQLite warning.
+The test suite exercises migrations, metadata responses, exact-recording lyric saves and validation, CORS preflight, safe audio paths, full and ranged responses, HEAD, conditional requests, and missing files. The local development runtime needs Node 22.19 or later because the OpenAPI validator and `node:sqlite` are used by the application and test suite. Node 24 also runs the suite, but emits Node's experimental SQLite warning.
 
 Run the server against a prepared data directory:
 
@@ -32,7 +32,11 @@ The server creates the SQLite parent directory and applies SQL files from `migra
 
 ## API
 
-The complete route and header contract is in [docs/api.md](docs/api.md). The public metadata routes never return the stored filesystem path. Audio is served as `audio/mp4` with byte ranges, `ETag`, `Last-Modified`, and `Accept-Ranges: bytes`.
+The complete route, status, schema, example, alias, and header contract is in [docs/api.md](docs/api.md) and the machine-readable OpenAPI document at `/docs/openapi.json`.
+
+Run the server locally, then open [http://127.0.0.1:3000/docs/](http://127.0.0.1:3000/docs/) for the interactive Scalar API reference. `/docs` redirects to `/docs/`; the pinned `@scalar/fastify-api-reference` bundle is served from `/docs/js/scalar.js`, with no CDN, Scalar account, paid service, request proxy, agent, or telemetry required. The documentation is public like the API itself and declares no authentication scheme.
+
+The public metadata routes never return the stored filesystem path. Audio is served as `audio/mp4` with byte ranges, `ETag`, `Last-Modified`, and `Accept-Ranges: bytes`.
 
 The import and timed-lyrics flows are public by design. `POST /import/inspect` only inspects one canonical YouTube video and returns editable metadata plus native AAC-LC format choices. `POST /import/jobs` starts a queued job only after the caller submits confirmed title, artist, optional album, and the selected compatible format. Poll `GET /import/jobs/:id`; retry a failed job with `POST /import/jobs/:id/retry`. The same routes are available under `/api/v1/import/`. `GET /import/health` reports whether yt-dlp, ffmpeg, and ffprobe are available. Complete karaoke documents are read and replaced at `GET`/`PUT /api/v1/songs/:id/lyrics`; each document is schema-versioned and tied to the exact `audio_sha256` recording hash, and SQLite replacement is atomic. See [docs/api.md](docs/api.md) for validation and error details.
 

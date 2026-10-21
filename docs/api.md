@@ -2,6 +2,16 @@
 
 The API is intentionally public and has no login or application account layer. CORS is controlled by `CORS_ORIGIN` and defaults to `*`; when a specific origin is configured, the response includes `Vary: Origin`. The service never includes `filePath` in JSON responses.
 
+## Interactive reference and OpenAPI
+
+The self-hosted interactive reference is available at `GET /docs/` (`GET /docs` redirects there). It is rendered by the pinned `@scalar/fastify-api-reference` package, and its browser bundle is served locally at `/docs/js/scalar.js`. The JSON and YAML documents are available at `/docs/openapi.json` and `/docs/openapi.yaml`; these documentation utility endpoints, including their automatic `HEAD` routes, are included in the OpenAPI document.
+
+The OpenAPI document is embedded in the application so it is also present in the production image. It describes every public API route, including the historical `/import/*` and `/songs/*` aliases, the versioned `/api/v1/*` routes, `HEAD` audio behavior, and the catch-all `OPTIONS /*` preflight. Scalar telemetry, Agent Scalar, the request proxy, the API-client account link, and external dashboard/registry/proxy URLs are disabled or blank; the app does not fetch a CDN or require a Scalar account.
+
+All API operations are unauthenticated. The specification uses an empty top-level `security` requirement and defines no security scheme. The interactive “Test Request” sends directly to the current server; `POST`/`PUT` requests perform real writes/imports.
+
+Fastify automatically registers `HEAD` for each `GET` route unless the application supplies a custom `HEAD` handler. Those automatic routes return the GET representation headers with no response body. Audio has a custom `HEAD` handler because it deliberately ignores `Range` and describes the complete recording; the other automatic `HEAD` operations are listed beside their GET operations in the specification.
+
 ## Common errors
 
 Errors use this shape:
@@ -10,7 +20,7 @@ Errors use this shape:
 {"error":{"code":"SONG_NOT_FOUND","message":"Song not found"}}
 ```
 
-Known errors use a 4xx status. An unexpected server failure uses `500 INTERNAL_ERROR`; its response does not include filesystem or database details.
+Known client errors use a 4xx status. Dependency and worker failures use the documented 5xx status or remain in an import job’s `errorCode`/`errorMessage`. An unexpected server failure uses `500 INTERNAL_ERROR`; its response does not include filesystem or database details.
 
 ## `GET /health`
 
@@ -84,7 +94,7 @@ The route returns the same representation headers as GET and no payload. It is u
 
 ## `OPTIONS /*`
 
-Returns `204` with the allowed methods `GET, HEAD, POST, PUT, OPTIONS` and request headers needed by browser media, import, and lyrics clients, including `Range`, `Content-Type`, `If-Range`, and conditional headers.
+Returns `204` with no body, the configured `Access-Control-Allow-Origin`, the fixed allowed methods `GET, HEAD, POST, PUT, OPTIONS`, and request headers needed by browser media, import, and lyrics clients: `Range, Content-Type, If-None-Match, If-Modified-Since, If-Range`. It does not echo the requested method or headers. Browser clients can read the audio validators and range headers because the response exposes `Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified`.
 
 ## Timed lyrics
 
@@ -95,9 +105,11 @@ GET /api/v1/songs/:id/lyrics
 PUT /api/v1/songs/:id/lyrics
 ```
 
-The document is versioned with `schemaVersion: 1` and is tied to the exact recording by `songId` and `audioSha256`. It contains a language, `reviewStatus: "complete"`, ordered lines, ordered words, and non-negative integer millisecond timestamps. A line has `startMs`, `endMs`, and words with `startMs` plus an optional `endMs`.
+The document is versioned with `schemaVersion: 1` and is tied to the exact recording by `songId` and `audioSha256`. On input, `songId`, `audioSha256`, and `reviewStatus` are optional: `songId` defaults to the path ID, `reviewStatus` defaults to `"complete"`, and a legacy song with no recording hash may omit the hash or send `null`. A song with a current recording hash must send that exact 64-hex `audioSha256`; omitted or `null` hashes return `409 AUDIO_VERSION_REQUIRED` or `409 AUDIO_VERSION_MISMATCH`. The normalized response always includes `songId`, `audioSha256`, and `reviewStatus`.
 
-`PUT` validates line and word ordering, unique IDs, text/word agreement, line containment, audio duration bounds, and the recording hash before replacing the existing row in one SQLite transaction. A hashed recording requires the current `audioSha256`; a stale or omitted hash returns `409` (`AUDIO_VERSION_MISMATCH` or `AUDIO_VERSION_REQUIRED`). Invalid timing returns `400` (`INVALID_LYRICS`, or `NON_MONOTONIC_TIMESTAMPS` for out-of-order or overlapping line/word spans), and the previous saved document remains available after a rejected request. `GET` returns `404 LYRICS_NOT_FOUND` when no complete document exists for the current recording.
+Input line and word IDs are optional and are generated when omitted (`line-N` and `line-N-word-M`). Line IDs must be unique; word IDs must be unique across the document. Lines are ordered, non-overlapping, and contain 1–300 ordered words. A word starts within its line; a supplied word `endMs` is exclusive, may be `null` or omitted on input, and must end within its line. Line `endMs` must be greater than `startMs`. Text is trimmed and non-empty (maximum 4,000 characters per line and 500 per word), and each line's whitespace-normalized text must equal its words joined by single spaces. There may be 1–2,000 lines and no more than 200,000 total line-plus-word text characters. Line ends may extend through `ceil(song duration * 1000) + 1000` milliseconds to allow a one-second duration tolerance.
+
+`PUT` validates all of those rules, the schema version, and the recording hash before replacing the existing row in one SQLite transaction. Invalid input returns `400 UNSUPPORTED_LYRICS_VERSION`, `400 INVALID_LYRICS_STATUS`, `400 INVALID_LYRICS`, or `400 NON_MONOTONIC_TIMESTAMPS`; song/hash conflicts return `409 LYRICS_SONG_MISMATCH`, `409 AUDIO_VERSION_REQUIRED`, or `409 AUDIO_VERSION_MISMATCH`. An unknown song returns `404 SONG_NOT_FOUND`; `GET` returns `404 LYRICS_NOT_FOUND` when no complete document exists for the current recording. Corrupt stored JSON returns `500 LYRICS_STORAGE_INVALID`, a post-save read failure returns `500 LYRICS_STORAGE_FAILED`, and other unexpected failures return `500 INTERNAL_ERROR`. The previous saved document remains available after a rejected request.
 
 Example request:
 
@@ -173,6 +185,8 @@ Request:
   "formatId":"140"
 }
 ```
+
+`format_id` is accepted as the legacy snake-case alias for `formatId`; when both are present, `formatId` takes precedence.
 
 The response is `202` with an import job in `queued` state. The server downloads only the selected native stream, uses `-c:a copy` for an MP4-to-M4A stream copy when needed, and runs ffprobe before publication. It measures duration, codec/profile, sample rate, channels, bitrate, and bytes. The file is staged beneath the configured audio volume, renamed into `imports/` atomically, hashed, and inserted with its catalogue row in one database transaction. No row is visible while the file is incomplete or unverified. Every confirmed import receives a new song ID; the service performs no deduplication.
 

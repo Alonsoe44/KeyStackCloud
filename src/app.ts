@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { access, constants } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import ScalarApiReference from '@scalar/fastify-api-reference';
 import { type AppConfig } from './config.js';
 import { resolveAudioFile, matchesIfNoneMatch, matchesIfRange, parseSingleRange, type AudioFile } from './audio.js';
 import { type DatabaseSync } from 'node:sqlite';
@@ -9,6 +10,7 @@ import { openDatabase, SongStore, type SongRecord } from './database.js';
 import { HttpError, isNodeError } from './errors.js';
 import { ImportError, ImportService } from './importer.js';
 import { LyricsError, LyricsStore, validateLyricsPayload } from './lyrics.js';
+import { openApiDocument } from './openapi.js';
 
 interface SongParams {
   id: string;
@@ -38,6 +40,16 @@ export interface AppResources {
   app: FastifyInstance;
   db: DatabaseSync;
   importer: ImportService;
+}
+
+export interface AppRoute {
+  method: string;
+  url: string;
+}
+
+export interface BuildAppOptions {
+  /** Test-only seam for comparing the registered route table with OpenAPI. */
+  onRoute?: (route: AppRoute) => void;
 }
 
 function publicSong(song: SongRecord): Omit<SongRecord, 'filePath'> {
@@ -180,7 +192,7 @@ function bodyText(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-export async function buildApp(config: AppConfig): Promise<AppResources> {
+export async function buildApp(config: AppConfig, options: BuildAppOptions = {}): Promise<AppResources> {
   if (config.requireSsdMarker) {
     await access(config.ssdMarkerPath, constants.R_OK).catch(() => {
       throw new Error(`Required SSD marker is missing: ${config.ssdMarkerPath}`);
@@ -200,6 +212,11 @@ export async function buildApp(config: AppConfig): Promise<AppResources> {
     stagingRoot: config.importStagingRoot,
   });
   const app = Fastify({ logger: { level: config.logLevel } });
+
+  app.addHook('onRoute', (route) => {
+    const methods = Array.isArray(route.method) ? route.method : [route.method];
+    for (const method of methods) options.onRoute?.({ method: String(method), url: route.url });
+  });
 
   app.addHook('onRequest', async (_request, reply) => {
     setCors(reply, config.corsOrigin);
@@ -373,6 +390,39 @@ export async function buildApp(config: AppConfig): Promise<AppResources> {
     }
     request.log.error(error);
     if (!reply.sent) sendError(reply, 500, 'INTERNAL_ERROR', 'Internal server error');
+  });
+
+  // Scalar's Fastify integration serves the bundled browser asset from this
+  // application origin. The specification is embedded so the production
+  // image does not need to copy repository documentation into /app.
+  await app.register(ScalarApiReference, {
+    routePrefix: '/docs',
+    openApiDocumentEndpoints: {
+      json: '/openapi.json',
+      yaml: '/openapi.yaml',
+    },
+    configuration: {
+      content: openApiDocument,
+      title: 'SongStreamer API Reference',
+      pageTitle: 'SongStreamer API Reference',
+      theme: 'fastify',
+      telemetry: false,
+      agent: { disabled: true, hideAddApi: true },
+      hideClientButton: true,
+      hideTestRequestButton: false,
+      showDeveloperTools: 'never',
+      isEditable: false,
+      withDefaultFonts: false,
+      proxyUrl: '',
+      customCss: '.generate-sdk-button, .scalar-app .selected-client-action button[aria-haspopup="dialog"], button.selected-client-action[aria-haspopup="dialog"] { display: none !important; }',
+      externalUrls: {
+        dashboardUrl: '',
+        registryUrl: '',
+        proxyUrl: '',
+        apiBaseUrl: '',
+      },
+    },
+    logLevel: 'silent',
   });
 
   app.addHook('onClose', async () => {

@@ -25,7 +25,7 @@ flowchart LR
 See [stack.md](stack.md) for the full inventory and verification status.
 
 - TypeScript compiled to JavaScript; Node.js 22; Fastify v5; npm lockfile.
-- SQLite through Node's built-in node:sqlite (Node >=22.13), with prepared SQL and ordered migrations. No ORM or additional native addon. Its Node 22 API is still in active development; isolate database access and verify against the pinned runtime. For this tiny read-mostly catalog, synchronous reads are bounded; streaming itself remains asynchronous.
+- SQLite through Node's built-in node:sqlite (Node >=22.13), with prepared SQL and ordered migrations. No ORM or additional native addon. Its Node 22 API is still in active development; isolate database access and verify against the pinned runtime. The repository's OpenAPI validation/test toolchain raises the local `npm ci`/test minimum to Node >=22.19. For this tiny read-mostly catalog, synchronous reads are bounded; streaming itself remains asynchronous.
 - One multi-stage Dockerfile, Docker Compose, Docker Buildx targeting linux/arm/v7. Build on the development machine, not the Pi.
 - Tailscale host service with public Funnel HTTPS; no private-network requirement for listeners.
 - SSH, Docker image save/load, versioned artifacts, previous-image retention, consistent SQLite backups.
